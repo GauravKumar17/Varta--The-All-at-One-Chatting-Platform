@@ -4,8 +4,9 @@ import prisma from "../config/db.js";
 import { sendOtpToEmail } from "../services/emailService.js";
 import { sendOtpToPhoneNumber,verifyPhoneNumberOtp } from "../services/twilioService.js";
 import { generateToken } from "../utils/generateToken.js";
+import { uploadFileToCloudinary } from "../config/cloudinary.js";
 
-const sendOtp = async (req: Request, res: Response) => {
+export const sendOtp = async (req: Request, res: Response) => {
     try {
         const {phoneNumber, phoneSuffix, email} = req.body;
         const otp = otpGenerator();
@@ -63,7 +64,7 @@ const sendOtp = async (req: Request, res: Response) => {
 };
 
 
-const verifyOtp = async(req:Request, res:Response)=>{
+export const verifyOtp = async(req:Request, res:Response)=>{
 
     try {
         const { phoneNumber, phoneSuffix, email, otp } = req.body;
@@ -136,14 +137,86 @@ const verifyOtp = async(req:Request, res:Response)=>{
     }
 }
 
-const updateProfile = async(req:Request , res:Response)=>{
-    const {username, agreed, about} = req.body;
-    // const userId = req.user.userId
+export const updateProfile = async (req: Request, res: Response) => {
+    const { username, agreedToTerms, about } = req.body;
+    const userId = (req as any).userId;
 
+    if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        const data: any = {};
+        if (username !== undefined) data.username = username;
+        if (typeof agreedToTerms !== "undefined") data.agreedToTerms = agreedToTerms;
+        if (about !== undefined) data.about = about;
+
+        const file = req.file;
+        if (file) {
+            const uploadResult = await uploadFileToCloudinary(file);
+            data.profilePic = uploadResult.secure_url;
+        }
+
+        const updatedUser = await prisma.user.update({
+            where: { id: userId },
+            data,
+        });
+
+        return res.status(200).json({ message: "Profile updated", user: updatedUser });
+    } catch (error) {
+        console.error("Error updating profile:", error);
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+};
+
+
+//this prevents the user from accessing protected routes if not authenticated/logged-in
+export const checkAuthenticated = async (req: Request, res: Response) => {
+    try {
+        const userId = (req as any).userId;
+        if (!userId) {
+            return res.status(401).json({ message: "Unauthorized for authentication" });
+        }
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        return res.status(200).json({ message: "User is authenticated", user });
+    } catch (error) {
+        console.error("Error checking authentication:", error);
+        return res.status(500).json({ message: "Internal Server Error" });
+        
+    }
 }
 
-export default {
-    sendOtp,
-    verifyOtp,
-    updateProfile
-};
+
+export const logout = async (req: Request, res: Response) => {
+    try {
+        res.clearCookie("auth_token", {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+    });
+        return res.status(200).json({message:"Logged out successfully"});
+    } catch (error) {
+        console.error("Error during logout:", error);
+        return res.status(500).json({message:"Internal Server Error"});
+        
+    }
+}
+
+export const getAllUsers = async (req: Request, res: Response) => {
+    try {
+        const users = await prisma.user.findMany();
+        return res.status(200).json({ users });
+    } catch (error) {
+        console.error("Error fetching users:", error);
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+
+
