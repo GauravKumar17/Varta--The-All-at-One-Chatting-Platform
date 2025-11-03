@@ -236,7 +236,6 @@ export const getAllUsers = async (req, res) => {
                     },
                 },
             });
-            return { ...user, conversation };
         }));
         res.json(userWithConversation);
     }
