@@ -211,12 +211,73 @@ export const logout = async (req: Request, res: Response) => {
 }
 
 export const getAllUsers = async (req: Request, res: Response) => {
+    const loggedInUserId = (req as any).userId;
     try {
-        const users = await prisma.user.findMany();
-        return res.status(200).json({ users });
+        //fetch all users except the logged-in user
+        const users = await prisma.user.findMany({
+            where:{ id: { not: loggedInUserId } },
+            select: {
+                id: true,
+                username: true,
+                profilePic: true,
+                lastSeen: true,
+                isOnline: true,
+                about: true,
+                phoneNumber: true,
+                phoneSuffix: true
+            }
+                
+        });
+
+        //For each user, check if there is an existing conversation between that user and the logged-in user.
+
+        const userWithConversation = await Promise.all(users.map(async (user)=>{
+            const conversation = await prisma.conversations.findFirst({
+                where:{
+                    participants:{
+                        some:{
+                           userId:loggedInUserId
+                        },
+                    },
+                    AND:{
+                        participants:{
+                            some:{
+                                userId:user.id
+                            },
+                        }
+                    }
+                },
+                include: {
+                    lastMessage: {
+                        select: {
+                            id: true,
+                            content: true,
+                            createdAt: true,
+                            sender: {
+                                select: {
+                                    id: true,
+                                    username: true,
+                                    profilePic: true,
+                                },
+                            },
+                            receiver: {
+                                select: {
+                                    id: true,
+                                    username: true,
+                                    profilePic: true,
+                                },
+                            },
+                        },
+                    },
+                },
+            })
+         }))
+        res.json(userWithConversation)
+        
     } catch (error) {
         console.error("Error fetching users:", error);
-        return res.status(500).json({ message: "Internal Server Error" });
+        return res.status(500).json({ message: "Internal Server Error at getUsers" });
     }
+}
 
 
