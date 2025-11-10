@@ -174,6 +174,36 @@ export const updateProfile = async (req: Request, res: Response) => {
     }
 };
 
+export const viewProfile = async (req: Request, res: Response) => {
+    const userId = (req as any).userId;
+
+    if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+
+    }
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                id: true,
+                username: true,
+                email: true,
+                phoneNumber: true,
+                profilePic: true,
+                about: true    
+            }
+        })
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        return res.status(200).json({ message: "Profile fetched successfully", user });
+        
+    } catch (error) {
+        console.error("Error viewing profile:", error);
+        return res.status(500).json({ message: "Internal Server Error from viewProfile" });
+        
+    }
+}
 
 //this prevents the user from accessing protected routes if not authenticated/logged-in
 export const checkAuthenticated = async (req: Request, res: Response) => {
