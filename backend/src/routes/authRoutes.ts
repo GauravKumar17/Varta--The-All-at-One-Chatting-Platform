@@ -10,6 +10,7 @@ router.put('/updateProfile', authMiddleware,multerMiddleware,updateProfile);
 router.get('/logout',logout)
 router.get('/checkAuth',authMiddleware,checkAuthenticated)
 router.get('/users',authMiddleware,getAllUsers)
+
 export default router;
 
 

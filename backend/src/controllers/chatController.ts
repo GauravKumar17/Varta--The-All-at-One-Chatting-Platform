@@ -142,3 +142,164 @@ export const sendMessage = async (req:Request, res:Response):Promise<void> => {
         
     }
 }
+
+
+export const getMessages = async (req:Request, res:Response):Promise<void> => {
+    const conversationId = Number(req.params.conversationId);
+    const userId = (req as any).userId;
+
+    try {
+        //check if conversation exsists
+        const conversation = await prisma.conversations.findUnique({
+            where:{id:conversationId},
+            include:{participants:true}
+        })
+
+        if(!conversation){
+            res.status(404).json({message:"Conversation not found"});
+            return;
+        }
+        //check if user is a participant of the conversation
+        const isParticipant = conversation.participants.some(participant => participant.userId === Number(userId));
+        if(!isParticipant){
+            res.status(403).json({message:"Forbidden: You are not a participant of this conversation"});
+            return;
+        }
+        //fetch messages
+        const messages = await prisma.messages.findMany({
+            where:{conversationId:conversationId},
+            include:{
+                sender:{
+                    select:{
+                        id:true,
+                        username:true,
+                        profilePic:true,
+                    }
+                },
+                receiver:{
+                    select:{
+                        id:true,
+                        username:true,
+                        profilePic:true,
+                    }
+                }
+            },
+            orderBy:{createdAt:'asc'}
+        });
+        
+        //update messge status for unread messages to 'READ'
+        await prisma.messages.updateMany({
+            where:{
+                conversationId:conversationId,
+                receiverId:Number(userId),
+                MessageStatus:{in:['SENT','DELIVERED']}
+            },
+            data:{MessageStatus:'READ'}
+        });
+
+        //reset unread count for the user in conversation -> participants->ConversationParticipants->unreadCount
+        await prisma.conversations.update({
+            where:{id:conversationId},
+            data:{
+                participants:{
+                    updateMany:{
+                        where:{userId:Number(userId)},
+                        data:{unreadCount:0}
+                    }
+                }
+            }
+        })
+
+        res.status(200).json({message:"Messages fetched successfully", data:messages});
+        return;
+
+        
+    } catch (error) {
+        console.error("Error in getMessages:", error);
+        res.status(500).json({ message: "Internal Server Error in getMessages" });
+        
+    }
+}
+
+export const markAsRead = async (req:Request, res:Response):Promise<void> => {
+    const {messageIds} = req.body.messageIds;
+    const userId = (req as any).userId;
+
+    try {
+        //get relevent mesage to determine senders
+        //Find all messages whose id is in the messageIds list and whose receiver is the current user
+        const allMessages = await prisma.messages.findMany({
+            where:{
+                id: {in:messageIds.map((id:string) => Number(id))},
+                receiverId: Number(userId)
+            }
+        })
+
+        if (allMessages.length === 0){
+            res.status(404).json("No messages found for the user")
+            return;
+        }
+
+        await prisma.messages.updateMany({
+            where:{
+                id: {in:messageIds.map((id:string) => Number(id))},
+                receiverId: Number(userId)
+            },
+            data:{
+                MessageStatus:'READ'
+            }
+
+        })
+
+    } catch (error) {
+        console.error("Error in markAsRead:", error);
+        res.status(500).json({ message: "Internal Server Error in markAsRead" });
+        return;
+        
+    }
+
+}
+
+/// deelete one or multiple messages
+
+export const deleteMessages = async(req:Request,res:Response): Promise<void> =>{
+    const {messageIds} = req.body;
+    const userId = (req as any).userId;
+    try {
+        if(!messageIds || messageIds.length ===0){
+            res.status(400).json({message:"messageIds are required"});
+            return;
+        }
+
+        //check messages where sender is the user, to delete them
+        const messages = await prisma.messages.findMany({
+            where:{
+                id:{in:messageIds.map((id:string) => Number(id))},
+                senderId: Number(userId)
+            }
+        })
+
+        if (messages.length === 0){
+            res.status(404).json("No messages found for the user or not aauthorized to delete")
+            return;
+        }
+
+        //delete messages
+        await prisma.messages.deleteMany({
+            where:{
+                id:{in:messages.map((msg) => msg.id)},
+                senderId: Number(userId)
+            }
+        })
+
+        res.status(200).json({message:"Messages deleted successfully"});
+        return;
+
+
+    } catch (error) {
+        console.error("Error in deleteMessages:", error);
+        res.status(500).json({ message: "Internal Server Error in deleteMessages" });
+        return;
+        
+    }
+}
