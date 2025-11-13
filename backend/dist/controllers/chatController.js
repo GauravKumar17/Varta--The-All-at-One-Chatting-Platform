@@ -56,6 +56,9 @@ export const sendMessage = async (req, res) => {
             }
             mediaUrl = uploadFile.secure_url;
             //determine content type based on mimetype
+            // The MIME type in Cloudinary is a metadata property that defines the content type 
+            // (e.g., image/png, video/mp4) of your uploaded file.
+            // Cloudinary uses it automatically to serve the correct file format and set the right Content-Type header for clients.
             if (file.mimetype.startsWith("image")) {
                 contentType = "IMAGE";
             }

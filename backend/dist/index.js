@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 dotenv.config();
 import authRoutes from "./routes/authRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
+import statusRoutes from "./routes/statusRoutes.js";
 import bodyParser from "body-parser";
 const app = express();
 app.use(express.json());
@@ -13,6 +14,7 @@ app.use(cookieParser());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use("/api/auth", authRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api.status", statusRoutes);
 const PORT = process.env.PORT || 5001;
 initDB().then(() => {
     app.listen(PORT, () => {
