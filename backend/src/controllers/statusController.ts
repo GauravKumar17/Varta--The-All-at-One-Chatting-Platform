@@ -123,13 +123,122 @@ export const getStatuses = async(req:Request, res:Response):Promise<void> =>{
     }
 }
 
-const viewStatus = async(req:Request, res:Response):Promise<void> =>{
+export const viewStatus = async(req:Request, res:Response):Promise<void> =>{
     const viewerId = (req as any).userId;
     const {statusId} = req.params;
 
     try {
+        //check if status exists
+        const status = await prisma.userStatus.findUnique({
+            where:{id:Number(statusId),
+                expiresAt:{gt: new Date()}},
+            include:{
+                user:{select:{id:true, username:true, profilePic:true}}
+            }
+        
+        })
+        if(!status){
+            res.status(404).json({message:"Status not found or Expired"});
+            return;
+        }
+        //check if viewer has already viewed the status, if not hen create a view record
+        const updateView = await prisma.userStatusView.upsert({
+            where:{
+                statusId_viewerId:{
+                    statusId:status.id,
+                    viewerId:viewerId
+                },
+
+            },
+            update:{}, //no action if already viewed
+            create:{
+                statusId:Number(statusId),
+                viewerId:Number(viewerId),
+            }
+
+        })
+        res.json({message:"Status viewed successfully", status:status, view:updateView});
+        return;
+
         
     } catch (error) {
+        console.log("Error viewing status", error);
+        res.status(500).json({message:"Internal server error from viewStatus"});
+        return;
+        
+    }
+}
+
+// When user want to see who vieewed their status
+export const getStatusViewers = async(req:Request,res:Response):Promise<void> =>{
+    const userId = (req as any).userId;
+    const {statusId} = req.params;
+    try {
+        // check
+        const status = await prisma.userStatus.findUnique({
+            where:{id:Number(statusId)},
+            select:{userId:true}
+
+        })
+        if(!status){
+            res.status(404).json({message:"Status not found"});
+            return;
+        }
+        if(status.userId !== Number(userId)){
+            res.status(403).json({message:"Unauthorized to view viewers of this status"});
+            return;
+        }
+        const viewers = await prisma.userStatusView.findMany({
+            where:{statusId:Number(statusId)},
+            include:{
+                viewer:{
+                    select:{
+                        id:true,
+                        username:true,
+                        profilePic:true,
+                    }
+                }
+            }
+        })
+
+        res.json({message:"Viewers fetched successfully", viewers:viewers})
+        return;
+    } catch (error) {
+        console.log("Error fetching status viewers", error);
+        res.status(500).json({message:"Internal server error from getStatusViewers"});
+        return;
+        
+    }
+
+}
+
+export const deleteStatus = async(req:Request, res:Response):Promise<void> =>{
+    const userId = (req as any).userId;
+    const {statusId} = req.params;
+
+    try {
+        const status = await prisma.userStatus.findUnique({
+            where:{id:Number(statusId)}
+        })
+        if(!status){
+            res.status(404).json({message:"Status not found"});
+            return;
+        }
+        if(status.userId !== Number(userId)){
+            res.status(403).json({message:"Unauthorized to delete this status"});
+            return;
+        }
+
+        await prisma.userStatus.delete({
+            where:{id:Number(statusId)}   
+        })
+        res.json({message:"Status deleted successfully"});
+        return;
+        
+    } catch (error) {
+        console.log("Error deleting status", error);
+        res.status(500).json({message:"Internal server error from deleteStatus"});
+        return;
         
     }
 }
