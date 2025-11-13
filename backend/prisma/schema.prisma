@@ -28,11 +28,13 @@ model User {
   messagesSent     Messages[]                 @relation("userMessagesSent")
   messagesReceived Messages[]                 @relation("userMessagesReceived")
   statuses         userStatus[]               @relation("userStatuses")
+  statusViews      userStatusView[]           @relation("userStatusViews")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   MessageReaction MessageReaction[]
+  
 }
 
 model Conversations {
@@ -114,4 +116,25 @@ model userStatus {
 
   createdAt DateTime @default(now())
   expiresAt DateTime
+
+  views      userStatusView[]
+  
+  @@index([userId])
+  // speeds up lookups for all views by a viewer
+  // Without the index, the DB has to scan the entire table to find matches.
+  // With the index, it can jump directly to relevant records.
+
+}
+
+model userStatusView {
+  id         Int        @id @default(autoincrement())
+  status     userStatus @relation(fields: [statusId], references: [id])
+  statusId   Int
+  viewer     User       @relation("userStatusViews", fields:[viewerId], references: [id])
+  viewerId   Int
+  viewedAt   DateTime   @default(now())
+
+  @@unique([statusId, viewerId])
+
+
 }
