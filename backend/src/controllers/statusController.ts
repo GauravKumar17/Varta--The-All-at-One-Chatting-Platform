@@ -12,7 +12,7 @@ export const createStatus = async(req:Request, res:Response):Promise<void> =>{
     const userId = (req as any).userId;
     const file = req.file;
 
-    let finalContentType=  contentType;
+    let finalContentType = contentType;
 
     if(!content || !contentType){
         res.status(4000).json({message:"content and content type are required"})
